@@ -1,0 +1,3 @@
+/mnt/c/Users/Luca/Desktop/Luca/Università/Parthenope/Reti di Calcolatori/reti-project/src/cmake-build-debug/CMakeFiles/reti_project.dir
+/mnt/c/Users/Luca/Desktop/Luca/Università/Parthenope/Reti di Calcolatori/reti-project/src/cmake-build-debug/CMakeFiles/edit_cache.dir
+/mnt/c/Users/Luca/Desktop/Luca/Università/Parthenope/Reti di Calcolatori/reti-project/src/cmake-build-debug/CMakeFiles/rebuild_cache.dir

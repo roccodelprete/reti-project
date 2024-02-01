@@ -1,0 +1,1 @@
+/usr/bin/cc -g CMakeFiles/reti_project.dir/server.c.o CMakeFiles/reti_project.dir/segreteria.c.o CMakeFiles/reti_project.dir/studente.c.o -o reti_project 
