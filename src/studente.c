@@ -10,6 +10,7 @@ int main (int argc, char **argv) {
     int request, req;
     struct sockaddr_in servaddr;
     int mat;
+    int c;
     char pass[255] = {0};
 
     /**
@@ -44,14 +45,19 @@ int main (int argc, char **argv) {
     servaddr.sin_port = htons(1026);
 
     /**
-         * La system call connect permette di connettere la socket al server specificato nella struct "servaddr" tramite
-         * l'indirizzo IP e la porta memorizzate nella struttura.
-         */
+     * La system call connect permette di connettere la socket al server specificato nella struct "servaddr" tramite
+     * l'indirizzo IP e la porta memorizzate nella struttura.
+     */
     if (connect(sockfd, (struct sockaddr *) &servaddr, sizeof(servaddr)) < 0) {
         perror("Errore nell'operazione di connect!");
         exit(1);
     }
 
+    /**
+     * Fase di login con inserimento delle credenziali richieste, che saranno successivamente passate alla segreteria
+     * che si occuperà del controllo dell'esistenza delle credenziali inserite all'interno della tabella apposita
+     * nel database.
+     */
     printf("LOGIN\n");
     printf("Inserire matricola: ");
     scanf("%d", &mat);
@@ -59,7 +65,6 @@ int main (int argc, char **argv) {
     /**
      * Pulisco il buffer di input.
      */
-    int c;
     while ((c = getchar()) != '\n' && c != EOF);
 
     printf("Inserire password: ");
@@ -75,10 +80,14 @@ int main (int argc, char **argv) {
     printf("\nEsito login: %s", state);
     printf("\n");
 
-    if (strcmp(state, "credenziali non corrette, accesso negato!") == 0) {
+    if(strcmp(state, "credenziali non corrette, accesso negato!") == 0) {
         exit(1);
     }
 
+    /**
+     * Itero le operazioni che lo studente può decidere di effettuare. In base alla scelta effettuata verranno svolte
+     * operazioni diverse.
+     */
     while (1) {
         printf("\nInserire il numero relativo all'operazione che si vuole effettuare:\n");
         printf("1 - Visualizza appelli disponibili\n");
@@ -93,20 +102,30 @@ int main (int argc, char **argv) {
          */
         while ((c = getchar()) != '\n' && c != EOF);
 
+        /**
+         * Invio la scelta effettuata alla segreteria.
+         */
         write(sockfd, &request, sizeof(request));
 
+        /**
+         * Se la scelta è 1 significa che lo studente vuole visualizzare gli appelli disponibili, potendo scegliere tra
+         * il visualizzarli tutti oppure visualizzare solo gli appelli per un determinato esame.
+         */
         if (request == 1) {
             int id;
             char name[255] = {0};
             char date[12] = {0};
             int num_rows;
 
-            printf("\nVuoi visualizzare tutti gli appelli o solo quelli relativi ad un determinato esame?");
+            printf("Vuoi visualizzare tutti gli appelli o solo quelli relativi ad un determinato esame?");
             printf("\n1 - Tutti gli appelli");
             printf("\n2 - Esame specifico");
             printf("\nScelta: ");
             scanf("%d", &req);
 
+            /**
+             * Inviamo la nuova scelta alla segreteria.
+             */
             write(sockfd, &req, sizeof(req));
 
             /**
@@ -114,6 +133,10 @@ int main (int argc, char **argv) {
              */
             while ((c = getchar()) != '\n' && c != EOF);
 
+            /**
+             * Nel caso in cui la scelta sia 1 non c'è bisogno di inviare ulteriori informazioni, mentre se la scelta
+             * ricade su un esame specifico bisogna inviare alla segreteria anche il nome dell'esame.
+             */
             if (req == 2) {
                 char exam[255] = {0};
                 printf("\nInserisci nome esame: ");
@@ -123,6 +146,11 @@ int main (int argc, char **argv) {
                 write(sockfd, exam, strlen(exam));
             }
 
+            /**
+             * Lo studente riceve dalla segreteria il numero di appelli disponibili, in modo che se non ne esistono
+             * viene visualizzato un messaggio di errore, mentre se ce n'è almeno 1 vengono letti i vari campi relativi
+             * al risultato della query.
+             */
             read(sockfd, &num_rows, sizeof(num_rows));
 
             if (num_rows == 0) {
@@ -139,6 +167,11 @@ int main (int argc, char **argv) {
                 }
             }
         }
+        /**
+         * Se invece lo studente vuole prenotare un determinato appello deve inviare il codice dell'appello al quale
+         * vuole prenotarsi e la sua matricola, che in realtà viene inviata automaticamente a partire da quella inserita
+         * durante la fase di login.
+         */
         else if (request == 2) {
             int cod;
 
@@ -155,13 +188,29 @@ int main (int argc, char **argv) {
 
             char res[255] = {0};
 
+            /**
+             * Lo studente riceve dalla segreteria l'esito dell'operazione e se la prenotazione è stata inserita con
+             * successo lo studente vedrà anche il numero della sua prenotazione.
+             */
             read(sockfd, res, sizeof(res));
 
-            printf("\nEsito operazione: %s", res);
-            printf("\n");
+            printf("\nEsito operazione: %s\n", res);
+
+            if (strcmp(res, "inserimento della nuova prenotazione completato con successo!") == 0) {
+                int count;
+                read(sockfd, &count, sizeof(count));
+
+                printf("Numero prenotazione: %d", count);
+                printf("\n");
+            }
         }
+        /**
+         * Se la scelta è 3 significa che lo studente vuole effettuare un'operazione di logout, di conseguenza si procede
+         * alla disconnessione.
+         */
         else if (request == 3) {
             printf("Logout effettuato correttamente!\n");
+            close(sockfd);
             exit(1);
         }
     }
