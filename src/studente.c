@@ -4,6 +4,7 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <string.h>
+#include <fcntl.h>
 
 int main (int argc, char **argv) {
     int sockfd;
@@ -22,11 +23,11 @@ int main (int argc, char **argv) {
     }
 
     /**
-     * Utilizzo la system call socket, che prende in input tre parametri di tipo intero, per creare una nuova socket
-     * da associare al descrittore "sockfd". I tre parametri in input riguardano, in ordine, il dominio
-     * degli indirizzi IP (IPv4 in questo caso), il protocollo di trasmissione (in questo caso TCP), mentre l'ultimo
-     * parametro, se messo a 0, specifica che si tratta del protocollo standard.
-     */
+         * Utilizzo la system call socket, che prende in input tre parametri di tipo intero, per creare una nuova socket
+         * da associare al descrittore "sockfd". I tre parametri in input riguardano, in ordine, il dominio
+         * degli indirizzi IP (IPv4 in questo caso), il protocollo di trasmissione (in questo caso TCP), mentre l'ultimo
+         * parametro, se messo a 0, specifica che si tratta del protocollo standard.
+         */
     if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
         perror("Errore nella creazione della socket!");
         exit(1);
@@ -44,12 +45,9 @@ int main (int argc, char **argv) {
     }
     servaddr.sin_port = htons(1026);
 
-    /**
-     * La system call connect permette di connettere la socket al server specificato nella struct "servaddr" tramite
-     * l'indirizzo IP e la porta memorizzate nella struttura.
-     */
     if (connect(sockfd, (struct sockaddr *) &servaddr, sizeof(servaddr)) < 0) {
-        perror("Errore nell'operazione di connect!");
+        perror("Errore nella connect: ");
+        printf("\n");
         exit(1);
     }
 

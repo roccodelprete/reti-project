@@ -105,7 +105,7 @@ int main(int argc, char **argv) {
      * Mettiamo il server in ascolto, specificando quante connessioni possono essere in attesa venire accettate
      * tramite il secondo argomento della chiamata.
      */
-    if ((listen(listenfd, 1024)) < 0) {
+    if ((listen(listenfd, 5)) < 0) {
         perror("Errore nell'operazione di listen!");
         exit(1);
     }
@@ -251,7 +251,7 @@ int main(int argc, char **argv) {
              * Controllo se i descrittori delle socket di connessione dei client sono pronte in lettura, poichè
              * significherebbe che lo studente specifico è pronto in scrittura.
              */
-            if (FD_ISSET(client_sockets[i].connfd, &read_set)) {
+            if (FD_ISSET(client_sockets[i].connfd, &read_set) && client_sockets[i].connfd != -1) {
                 /**
                  * La segreteria riceve la scelta di operazione da effettuare da parte dello studente.
                  */
@@ -394,9 +394,9 @@ int main(int argc, char **argv) {
                  */
                 else if (behaviour == 3) {
                     close(client_sockets[i].connfd);
-                    client_sockets[i].matricola = 0;
                     FD_CLR(client_sockets[i].connfd, &master_set);
-                    mysql_close(conn);
+                    client_sockets[i].connfd = -1;
+                    client_sockets[i].matricola = 0;
                 }
             }
         }
