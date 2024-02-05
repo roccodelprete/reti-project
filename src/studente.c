@@ -4,13 +4,13 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <string.h>
-#include <fcntl.h>
 
 int main (int argc, char **argv) {
     int sockfd;
     int request, req;
     struct sockaddr_in servaddr;
     int mat;
+    int cont;
     int c;
     char pass[255] = {0};
 
@@ -23,11 +23,16 @@ int main (int argc, char **argv) {
     }
 
     /**
-         * Utilizzo la system call socket, che prende in input tre parametri di tipo intero, per creare una nuova socket
-         * da associare al descrittore "sockfd". I tre parametri in input riguardano, in ordine, il dominio
-         * degli indirizzi IP (IPv4 in questo caso), il protocollo di trasmissione (in questo caso TCP), mentre l'ultimo
-         * parametro, se messo a 0, specifica che si tratta del protocollo standard.
-         */
+     * Label a cui si riferiscono i goto se fallisce una delle richieste effettuate dallo studente verso la segreteria
+     * nel caso in cui salti la connessione con quest'ultima.
+     */
+    login:
+    /**
+     * Utilizzo la system call socket, che prende in input tre parametri di tipo intero, per creare una nuova socket
+     * da associare al descrittore "sockfd". I tre parametri in input riguardano, in ordine, il dominio
+     * degli indirizzi IP (IPv4 in questo caso), il protocollo di trasmissione (in questo caso TCP), mentre l'ultimo
+     * parametro, se messo a 0, specifica che si tratta del protocollo standard.
+     */
     if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
         perror("Errore nella creazione della socket!");
         exit(1);
@@ -45,11 +50,37 @@ int main (int argc, char **argv) {
     }
     servaddr.sin_port = htons(1026);
 
-    if (connect(sockfd, (struct sockaddr *) &servaddr, sizeof(servaddr)) < 0) {
-        perror("Errore nella connect: ");
-        printf("\n");
-        exit(1);
-    }
+    /**
+     * Contatore dei tentativi di connessione.
+     */
+    cont = 3;
+
+    /**
+     * Si tenta la connessione per 3 volte, dopodichè viene ritentata ulteriormente dopo un attesa random.
+     */
+    do {
+        if (connect(sockfd, (struct sockaddr *) &servaddr, sizeof(servaddr)) < 0) {
+            printf("Connessione fallita, ritento...\n\n");
+            cont--;
+            sleep(2);
+        }
+        else {
+            break;
+        }
+
+        if (cont == 0) {
+            int delay = rand() % 5 + 1;
+            sleep(delay);
+
+            if (connect(sockfd, (struct sockaddr *) &servaddr, sizeof(servaddr)) < 0) {
+                printf("Impossibile connettersi!\n");
+                exit(1);
+            }
+            else {
+                printf("Connessione stabilita!\n");
+            }
+        }
+    } while (cont > 0);
 
     /**
      * Fase di login con inserimento delle credenziali richieste, che saranno successivamente passate alla segreteria
@@ -69,11 +100,25 @@ int main (int argc, char **argv) {
     fgets(pass, sizeof(pass), stdin);
     pass[strlen(pass) - 1] = 0;
 
-    write(sockfd, &mat, sizeof(mat));
-    write(sockfd, pass, sizeof(pass));
+    if (write(sockfd, &mat, sizeof(mat)) < 0) {
+        printf("Connessione con la segreteria persa, ritento la connessione...\n");
+        close(sockfd);
+        goto login;
+    }
+
+    if (write(sockfd, pass, sizeof(pass)) < 0) {
+        printf("Connessione con la segreteria persa, ritento la connessione...\n");
+        close(sockfd);
+        goto login;
+    }
 
     char state[255] = {0};
-    read(sockfd, state, sizeof(state));
+
+    if (read(sockfd, state, sizeof(state)) < 0) {
+        printf("Connessione con la segreteria persa, ritento la connessione...\n");
+        close(sockfd);
+        goto login;
+    }
 
     printf("\nEsito login: %s", state);
     printf("\n");
@@ -103,7 +148,11 @@ int main (int argc, char **argv) {
         /**
          * Invio la scelta effettuata alla segreteria.
          */
-        write(sockfd, &request, sizeof(request));
+        if (write(sockfd, &request, sizeof(request)) < 0) {
+            printf("Connessione con la segreteria persa, ritento la connessione...\n");
+            close(sockfd);
+            goto login;
+        }
 
         /**
          * Se la scelta è 1 significa che lo studente vuole visualizzare gli appelli disponibili, potendo scegliere tra
@@ -124,7 +173,11 @@ int main (int argc, char **argv) {
             /**
              * Inviamo la nuova scelta alla segreteria.
              */
-            write(sockfd, &req, sizeof(req));
+            if (write(sockfd, &req, sizeof(req)) < 0) {
+                printf("Connessione con la segreteria persa, ritento la connessione...\n");
+                close(sockfd);
+                goto login;
+            }
 
             /**
              * Pulisco il buffer di input.
@@ -141,7 +194,11 @@ int main (int argc, char **argv) {
                 fgets(exam, sizeof(exam), stdin);
                 exam[strlen(exam) - 1] = 0;
 
-                write(sockfd, exam, strlen(exam));
+                if (write(sockfd, exam, strlen(exam)) < 0) {
+                    printf("\nConnessione con la segreteria persa, ritento la connessione...\n");
+                    close(sockfd);
+                    goto login;
+                }
             }
 
             /**
@@ -149,7 +206,11 @@ int main (int argc, char **argv) {
              * viene visualizzato un messaggio di errore, mentre se ce n'è almeno 1 vengono letti i vari campi relativi
              * al risultato della query.
              */
-            read(sockfd, &num_rows, sizeof(num_rows));
+            if (read(sockfd, &num_rows, sizeof(num_rows)) < 0) {
+                printf("\nConnessione con la segreteria persa, ritento la connessione...\n");
+                close(sockfd);
+                goto login;
+            }
 
             if (num_rows == 0) {
                 printf("\nNon esistono appelli disponibili!\n");
@@ -157,9 +218,22 @@ int main (int argc, char **argv) {
             else {
                 printf("\nAppelli disponibili:\n");
                 for (int i = 0; i < num_rows; i++) {
-                    read(sockfd, &id, sizeof(id));
-                    read(sockfd, name, sizeof(name));
-                    read(sockfd, date, sizeof(date));
+                    if (read(sockfd, &id, sizeof(id)) < 0) {
+                        printf("\nConnessione con la segreteria persa, ritento la connessione...\n");
+                        close(sockfd);
+                        goto login;
+                    }
+                    if (read(sockfd, name, sizeof(name)) < 0) {
+                        printf("\nConnessione con la segreteria persa, ritento la connessione...\n");
+                        close(sockfd);
+                        goto login;
+                    }
+
+                    if (read(sockfd, date, sizeof(date)) < 0) {
+                        printf("\nConnessione con la segreteria persa, ritento la connessione...\n");
+                        close(sockfd);
+                        goto login;
+                    }
 
                     printf("%d\t%s\t%s\n", id, name, date);
                 }
@@ -181,8 +255,17 @@ int main (int argc, char **argv) {
              */
             while ((c = getchar()) != '\n' && c != EOF);
 
-            write(sockfd, &cod, sizeof(cod));
-            write(sockfd, &mat, sizeof(mat));
+            if (write(sockfd, &cod, sizeof(cod)) < 0) {
+                printf("\nConnessione con la segreteria persa, ritento la connessione...\n");
+                close(sockfd);
+                goto login;
+            }
+
+            if (write(sockfd, &mat, sizeof(mat)) < 0) {
+                printf("\nConnessione con la segreteria persa, ritento la connessione...\n");
+                close(sockfd);
+                goto login;
+            }
 
             char res[255] = {0};
 
@@ -190,13 +273,21 @@ int main (int argc, char **argv) {
              * Lo studente riceve dalla segreteria l'esito dell'operazione e se la prenotazione è stata inserita con
              * successo lo studente vedrà anche il numero della sua prenotazione.
              */
-            read(sockfd, res, sizeof(res));
+            if (read(sockfd, res, sizeof(res)) < 0) {
+                printf("\nConnessione con la segreteria persa, ritento la connessione...\n");
+                close(sockfd);
+                goto login;
+            }
 
             printf("\nEsito operazione: %s\n", res);
 
             if (strcmp(res, "inserimento della nuova prenotazione completato con successo!") == 0) {
                 int count;
-                read(sockfd, &count, sizeof(count));
+                if (read(sockfd, &count, sizeof(count)) < 0) {
+                    printf("Connessione con la segreteria persa, ritento la connessione...\n");
+                    close(sockfd);
+                    goto login;
+                }
 
                 printf("Numero prenotazione: %d", count);
                 printf("\n");
